@@ -253,7 +253,7 @@ func processCerts(cbr *ChainBuilderResult, r *TLSInfo) {
 		MaxConstraintComparisions: 0,
 	}
 
-	if tlsToolConfig.NoUseTLSIntermediates == 1 {
+	if tlsToolConfig.NoUseTLSIntermediates == true {
 		localVerifyOptions.Intermediates = nil
 	}
 

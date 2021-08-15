@@ -83,7 +83,8 @@ func ParseCommandLineArgs() *TLSToolConfig {
 		"address",
 		&argparse.Options{
 			Required: false,
-			Help:     "address for creating tcp connection e.g www.example.com. An ip address can also be used",
+			Help: "address for creating tcp connection e.g www.example.com. An ip address can also be used." +
+				" (-s/--servername) can be used to specific the servername used for SNI.",
 		})
 	port := parser.String(
 		"p",
@@ -97,28 +98,32 @@ func ParseCommandLineArgs() *TLSToolConfig {
 		"servername",
 		&argparse.Options{
 			Required: false,
-			Help:     "name used for TLS SNI extension and certificate verification. If not specified address will be used.",
+			Help: "name used for TLS SNI extension and certificate verification. If not specified the value for" +
+				" (-a/--address) will be used.",
 		})
 	certDir := parser.String(
 		"d",
 		"cert-dir",
 		&argparse.Options{
 			Required: false,
-			Help:     "path to the directory that contains the folders 'root' and 'intermediate' to load certificates for extra/specific chain building.",
+			Help: "path to the directory that contains the folders 'root' and 'intermediate' to load certificates" +
+				" for extra/specific chain building. NOTE: only used for mode: chains",
 		})
-	noUseTLSIntermediates := parser.Int(
+	noUseTLSIntermediates := parser.Flag(
 		"n",
 		"no-use-tls-intermediates",
 		&argparse.Options{
 			Required: false,
-			Help:     "when set to 1 do not try and use the intermediates provided by by the tls connection",
+			Help: "Do not try and use the intermediate(s) provided by by the tls connection for the construction" +
+				" of tls chains. NOTE: only used for mode: chains",
 		})
 	insecureSkipVerify := parser.Flag(
 		"i",
 		"insecure-skip-verify",
 		&argparse.Options{
 			Required: false,
-			Help:     "when set to 1 do not try and use the intermediates provided by by the tls connection",
+			Help: "Set InsecureSkipVerify tls.Config.InsecureSkipVerify to true i.e. accept any certificate" +
+				" provided by the remote host.",
 		})
 	tlsMinVersion := parser.String(
 		"u",

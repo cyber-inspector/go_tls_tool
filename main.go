@@ -20,7 +20,7 @@ type TLSToolConfig struct {
 	CertDir               string `json:"cert_dir"`
 	Port                  string `json:"port"`
 	InsecureSkipVerify    bool   `json:"insecure_skip_verify"`
-	NoUseTLSIntermediates int    `json:"no_use_tls_intermediates"`
+	NoUseTLSIntermediates bool   `json:"no_use_tls_intermediates"`
 	TLSMinVersion         string `json:"tls_min_version"`
 	TLSMaxVersion         string `json:"tls_max_version"`
 	printVersion          bool
@@ -105,9 +105,6 @@ func modeGetChains() interface{} {
 }
 
 func modeGetTLS() interface{} {
-	// Load certs root/intermediate from
-	loadCerts(tlsToolConfig.CertDir)
-
 	r, rErr := doTLS(
 		tlsToolConfig.Address,
 		tlsToolConfig.Port,
@@ -147,5 +144,5 @@ func modeGetTLS() interface{} {
 		tlr.PeerCertificates = append(tlr.PeerCertificates, peerCertConverted)
 		fmt.Println("["+strconv.Itoa(i)+"]", GetCertSummaryString(peerCertConverted))
 	}
-	return r
+	return tlr
 }
