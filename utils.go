@@ -83,22 +83,22 @@ func ParseCommandLineArgs() *TLSToolConfig {
 		"address",
 		&argparse.Options{
 			Required: false,
-			Help: "address for creating tcp connection e.g www.example.com. An ip address can also be used." +
-				" (-s/--servername) can be used to specific the servername used for SNI.",
+			Help: "Address for opening tcp connection e.g www.example.com. An ip address can also be used." +
+				"Servername (-s/--servername) can be used to specify the servername used for SNI.",
 		})
-	port := parser.String(
+	port := parser.Int(
 		"p",
 		"port",
 		&argparse.Options{
 			Required: false,
-			Help:     "port to use for the tcp connection. Default: 443",
+			Help:     "Port to use for the tcp connection. Default: 443",
 		})
 	servername := parser.String(
 		"s",
 		"servername",
 		&argparse.Options{
 			Required: false,
-			Help: "name used for TLS SNI extension and certificate verification. If not specified the value for" +
+			Help: "Name used for TLS SNI extension and certificate verification. If not specified the value for" +
 				" (-a/--address) will be used.",
 		})
 	certDir := parser.String(
@@ -106,7 +106,7 @@ func ParseCommandLineArgs() *TLSToolConfig {
 		"cert-dir",
 		&argparse.Options{
 			Required: false,
-			Help: "path to the directory that contains the folders 'root' and 'intermediate' to load certificates" +
+			Help: "Path to the directory that contains the folders 'root' and 'intermediate' to load certificates" +
 				" for extra/specific chain building. NOTE: only used for mode: chains",
 		})
 	noUseTLSIntermediates := parser.Flag(
@@ -114,15 +114,15 @@ func ParseCommandLineArgs() *TLSToolConfig {
 		"no-use-tls-intermediates",
 		&argparse.Options{
 			Required: false,
-			Help: "Do not try and use the intermediate(s) provided by by the tls connection for the construction" +
-				" of tls chains. NOTE: only used for mode: chains",
+			Help: "Do not try and use the intermediate(s) provided by the tls connection for the construction" +
+				" of default tls chains. NOTE: only used for mode: chains",
 		})
 	insecureSkipVerify := parser.Flag(
 		"i",
 		"insecure-skip-verify",
 		&argparse.Options{
 			Required: false,
-			Help: "Set InsecureSkipVerify tls.Config.InsecureSkipVerify to true i.e. accept any certificate" +
+			Help: "Set tls.Config.InsecureSkipVerify to true i.e. accept any certificate" +
 				" provided by the remote host.",
 		})
 	tlsMinVersion := parser.String(
@@ -130,14 +130,14 @@ func ParseCommandLineArgs() *TLSToolConfig {
 		"tls-min-version",
 		&argparse.Options{
 			Required: false,
-			Help:     "Minimum TLS version to use. Available values: " + getSupportedTLSVersionsString(),
+			Help:     "Minimum TLS version to use in handshake. Available values: " + getSupportedTLSVersionsString(),
 		})
 	tlsMaxVersion := parser.String(
 		"x",
 		"tls-max-version",
 		&argparse.Options{
 			Required: false,
-			Help:     "Maximum TLS version to use. Available values: " + getSupportedTLSVersionsString(),
+			Help:     "Maximum TLS version to use in handshake. Available values: " + getSupportedTLSVersionsString(),
 		})
 	noDumpResult := parser.Flag(
 		"o",
@@ -152,6 +152,13 @@ func ParseCommandLineArgs() *TLSToolConfig {
 		// This can also be done by passing -h or --help flags
 		fmt.Printf("ERROR: error parsing args %s\n", err.Error())
 		os.Exit(1)
+	}
+	if *port == 0 {
+		*port = 443
+	} else if *port < 0 {
+		log.Fatal("Port must between 1 and 65535")
+	} else if *port > 65535 {
+		log.Fatal("Port must between 1 and 65535")
 	}
 	conf := TLSToolConfig{
 		Mode:                  *mode,
@@ -176,7 +183,7 @@ func loadCerts(certDir string) {
 		if rootPemCertListErr != nil {
 			log.Println("Failed to load root certificates from", rootCertDir, "due to",
 				rootPemCertListErr.Error())
-			os.Exit(1)
+			//os.Exit(1)
 		}
 		rootCertPool = rootPemCertPool
 
@@ -186,9 +193,12 @@ func loadCerts(certDir string) {
 		if intermediatePemCertListErr != nil {
 			log.Println("Failed to load root certificates from", intermediateCertDir, "due to",
 				intermediatePemCertListErr.Error())
-			os.Exit(1)
+			//os.Exit(1)
 		}
 		intermediateCertPool = intermediatePemCertPool
+	} else {
+		log.Println("No path specified for -d/--cert-dir. No custom chains will be attempted to be built." +
+			" Default chains will still be attempted to be built.")
 	}
 }
 

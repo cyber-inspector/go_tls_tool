@@ -109,6 +109,10 @@ type ExtraKeyUsage struct {
 type ChainLink struct {
 	Subject                string           `json:"subject"`
 	Issuer                 string           `json:"issuer"`
+	DNSNames               []string         `json:"dns_names"`
+	EmailAddresses         []string         `json:"email_addresses"`
+	IPAddresses            []string         `json:"ip_addresses"`
+	URIs                   []string         `json:"uris"`
 	NotBefore              string           `json:"not_before"`
 	NotBeforeEpoch         int64            `json:"not_before_epoch"`
 	NotAfter               string           `json:"not_after"`
@@ -264,7 +268,7 @@ func processCerts(cbr *ChainBuilderResult, r *TLSInfo) {
 			" connection ", defaultChainsErr)
 	}
 
-	log.Println("Certificate Chains(s) the were able to be built using certificates received from TLS connection" +
+	log.Println("Default Certificate Chains(s) the were able to be built using certificates received from TLS connection" +
 		" in the format: [chain_index][certificate_index] <certificate information>")
 	fmt.Println("NOTE: Some operating system (e.g. windows) can provide extra intermediate certificates than" +
 		" those provided from the TLS connection for use in chain building.")
@@ -284,9 +288,8 @@ func processCerts(cbr *ChainBuilderResult, r *TLSInfo) {
 		customPoolChains, customPoolChainsErr := leafCert.Verify(x509.VerifyOptions{
 			DNSName:       dnsName,
 			Intermediates: intermediateCertPool,
-			// Need to check the cert wsa valid when the website was scanned
-			CurrentTime: time.Time{},
-			Roots:       rootCertPool,
+			CurrentTime:   time.Time{},
+			Roots:         rootCertPool,
 		})
 
 		if customPoolChainsErr != nil {
@@ -294,7 +297,7 @@ func processCerts(cbr *ChainBuilderResult, r *TLSInfo) {
 				" local certificate directory specified from the command line arg -d/--cert-dir", customPoolChainsErr)
 		}
 
-		log.Println("Certificate Chains(s) the were able to be built using certificates received from the" +
+		log.Println("Custom Certificate Chains(s) the were able to be built using certificates received from the" +
 			" local certificate directory specified from the command line arg -d/--cert-dir in the format:" +
 			" [chain_index][certificate_index] <certificate information>")
 		customPoolConvertedChains, customPoolConvertedChainsErr := ConvertChains(customPoolChains)
@@ -325,6 +328,8 @@ func CreateChainLink(c *x509.Certificate) *ChainLink {
 	cl := ChainLink{
 		Subject:                c.Subject.String(),
 		Issuer:                 c.Issuer.String(),
+		DNSNames:               c.DNSNames,
+		EmailAddresses:         c.EmailAddresses,
 		NotBefore:              c.NotBefore.UTC().Format("2006-01-02T15:04:05 -0700"),
 		NotBeforeEpoch:         c.NotBefore.Unix(),
 		NotAfter:               c.NotAfter.UTC().Format("2006-01-02T15:04:05 -0700"),
@@ -337,6 +342,12 @@ func CreateChainLink(c *x509.Certificate) *ChainLink {
 			SHA256: GetCertFingerprint("SHA256", c.Raw),
 		},
 		CertPem: x509ToPem(c),
+	}
+	for _, ip := range c.IPAddresses {
+		cl.IPAddresses = append(cl.IPAddresses, ip.String())
+	}
+	for _, uri := range c.URIs {
+		cl.IPAddresses = append(cl.IPAddresses, uri.String())
 	}
 	for _, eku := range c.ExtKeyUsage {
 		cl.ExtraKeyUsage = append(cl.ExtraKeyUsage, GetExtKeyUsageDetail(eku))
@@ -399,9 +410,7 @@ func CreateCertPoolFromDir(pemCertsDir string, certType string) (*x509.CertPool,
 		return nil, listPemCertsDirErr
 	}
 
-	files := 0
 	for _, pemCertFile := range pemCertFiles {
-		files += 1
 		filePath := filepath.Join(pemCertsDir, pemCertFile.Name())
 
 		pemCerts, pemCertFileDataErr := ioutil.ReadFile(filePath)
@@ -434,6 +443,7 @@ func CreateCertPoolFromDir(pemCertsDir string, certType string) (*x509.CertPool,
 	}
 
 	// If there were not any certs added to the pool then return nil
+	fmt.Println(strconv.Itoa(numCertsAdded) + " certificates have been added to the " + certType + " pool.")
 	if numCertsAdded == 0 {
 		certPool = nil
 	}
@@ -442,20 +452,29 @@ func CreateCertPoolFromDir(pemCertsDir string, certType string) (*x509.CertPool,
 
 func CheckCertAllowed(cert *x509.Certificate, certType string) bool {
 	if certType == "root" || certType == "intermediate" {
-		ch := GetCertFingerprint("SHA256", cert.Raw)
+		certificateFingerprint := GetCertFingerprint("SHA256", cert.Raw)
 		// KeyUsageCertSign and KeyUsageCRLSign should be on root and intermediate certs
 		if (!HasBit(int(cert.KeyUsage), int(x509.KeyUsageCertSign)) ||
 			!HasBit(int(cert.KeyUsage), int(x509.KeyUsageCRLSign))) && int(cert.KeyUsage) != 0 {
-			log.Println("Not adding cert KeyUsageCertSign or KeyUsageCRLSign not present." +
-				" KeyUsage: " + strconv.Itoa(int(cert.KeyUsage)) + ". SHA256Fingerprint: " + ch)
+			log.Println("Not adding certificate with SHA256 Fingerprint: " + certificateFingerprint +
+				" as KeyUsageCertSign or KeyUsageCRLSign are not present." +
+				" KeyUsage (base 10 int): " + strconv.Itoa(int(cert.KeyUsage)))
 			return false
 		}
-		ih := GetCertFingerprint("SHA256", cert.RawIssuer)
-		sh := GetCertFingerprint("SHA256", cert.RawSubject)
+		issuerFingerprint := GetCertFingerprint("SHA256", cert.RawIssuer)
+		subjectFingerprint := GetCertFingerprint("SHA256", cert.RawSubject)
 		// Issue and Subject must match if it is a root and the reverse if it is an intermediate
-		if (ih != sh && certType == "root") || (ih == sh && certType == "intermediate") {
-			log.Println("Not adding cert SHA256Fingerprint: " + ch + " to pool. ih: " + ih +
-				", sh: " + sh + ", certType: " + certType)
+		if issuerFingerprint != subjectFingerprint && certType == "root" {
+			log.Println("Not adding cert SHA256Fingerprint: " + certificateFingerprint + " to " + certType + " pool" +
+				" as issuer '" + cert.Issuer.String() + "' with SHA256 Fingerprint: " + issuerFingerprint +
+				" does not match subject '" + cert.Subject.String() + "' subjectFingerprint: " + subjectFingerprint +
+				" For root certificates the subject and issuer should match.")
+			return false
+		} else if issuerFingerprint == subjectFingerprint && certType == "intermediate" {
+			log.Println("Not adding cert SHA256Fingerprint: " + certificateFingerprint + " to " + certType + " pool" +
+				" as issuer '" + cert.Issuer.String() + "' with SHA256 Fingerprint: " + issuerFingerprint +
+				" does matches subject '" + cert.Subject.String() + "' subjectFingerprint: " + subjectFingerprint +
+				" For intermediate certificates the subject and issuer should not match.")
 			return false
 		}
 	}
@@ -463,7 +482,6 @@ func CheckCertAllowed(cert *x509.Certificate, certType string) bool {
 }
 
 func constructTLSConfig() *tls.Config {
-
 	if tlsToolConfig.Address == "" {
 		log.Fatal("Address (-a/--address) must be specified. Use -h/--help for more information.")
 	}

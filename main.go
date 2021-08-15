@@ -18,7 +18,7 @@ type TLSToolConfig struct {
 	Address               string `json:"address"`
 	Servername            string `json:"servername"`
 	CertDir               string `json:"cert_dir"`
-	Port                  string `json:"port"`
+	Port                  int    `json:"port"`
 	InsecureSkipVerify    bool   `json:"insecure_skip_verify"`
 	NoUseTLSIntermediates bool   `json:"no_use_tls_intermediates"`
 	TLSMinVersion         string `json:"tls_min_version"`
@@ -34,6 +34,10 @@ type TLSToolResult struct {
 }
 
 type ChainBuilderResult struct {
+	ServerName       string
+	Address          string
+	Version          string
+	CipherSuite      string
 	PeerCertificates []*ChainLink   `json:"peer_certificates"`
 	DefaultChains    [][]*ChainLink `json:"default_chains"`
 	CustomPoolChains [][]*ChainLink `json:"custom_pool_chains"`
@@ -86,7 +90,7 @@ func modeGetChains() interface{} {
 
 	r, rErr := doTLS(
 		tlsToolConfig.Address,
-		tlsToolConfig.Port,
+		strconv.Itoa(tlsToolConfig.Port),
 		0,
 		0,
 	)
@@ -99,7 +103,19 @@ func modeGetChains() interface{} {
 		log.Fatal("Failed to make a TLS connection for address: " + tlsToolConfig.Address + ". Please check the address and try again.")
 	}
 
-	cbr := ChainBuilderResult{}
+	cbr := ChainBuilderResult{
+		ServerName:  r.ServerName,
+		Address:     r.Address,
+		CipherSuite: tls.CipherSuiteName(r.CipherSuite),
+	}
+
+	for tlsVersionString, tlsVersionUint := range tlsVersionsMap {
+		if tlsVersionUint == r.Version {
+			cbr.Version = tlsVersionString
+			break
+		}
+	}
+
 	processCerts(&cbr, r)
 	return &cbr
 }
@@ -107,7 +123,7 @@ func modeGetChains() interface{} {
 func modeGetTLS() interface{} {
 	r, rErr := doTLS(
 		tlsToolConfig.Address,
-		tlsToolConfig.Port,
+		strconv.Itoa(tlsToolConfig.Port),
 		0,
 		0,
 	)
@@ -121,10 +137,9 @@ func modeGetTLS() interface{} {
 	}
 
 	tlr := TLSVersionResult{
-		ServerName:       r.ServerName,
-		Address:          r.Address,
-		CipherSuite:      tls.CipherSuiteName(r.CipherSuite),
-		PeerCertificates: nil,
+		ServerName:  r.ServerName,
+		Address:     r.Address,
+		CipherSuite: tls.CipherSuiteName(r.CipherSuite),
 	}
 
 	for tlsVersionString, tlsVersionUint := range tlsVersionsMap {
