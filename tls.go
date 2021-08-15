@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -76,6 +77,13 @@ var keyUsageList = []x509.KeyUsage{
 	x509.KeyUsageDecipherOnly,
 }
 
+var tlsVersionsMap = map[string]uint16{
+	"TLS10": tls.VersionTLS10,
+	"TLS11": tls.VersionTLS11,
+	"TLS12": tls.VersionTLS12,
+	"TLS13": tls.VersionTLS13,
+}
+
 // Copied from http.transport.go
 type tlsHandshakeTimeoutError struct{}
 
@@ -133,30 +141,18 @@ func GetKeyUsageDetail(e x509.KeyUsage) *ExtraKeyUsage {
 	return nil
 }
 
-// getChains establishes a TLS connection and returns some metadata about the connection should a successful
+// doTLS establishes a TLS connection and returns some metadata about the connection should a successful
 // tls connection be made.
 // address is the ip address or domain used to obtain the ip address for the target of the TLS connection
 // servername is the SNI value
 // insecureSkipVerify when true will disable certificate verification (default is false)
 // tcpDialTimeout how long to wait to create a tcp connection before aborting
 // tlsHandshakeTimeout how long to wait to create a tls connection before aborting
-func getChains(address string, port string, servername string, insecureSkipVerify bool, tcpDialTimeout time.Duration,
-	tlsHandshakeTimeout time.Duration) (*TLSInfo, error) {
+func doTLS(address string, port string, tcpDialTimeout time.Duration, tlsHandshakeTimeout time.Duration,
+) (*TLSInfo, error) {
 	var tlsInfo TLSInfo
 
-	// Servername is the string that will be used by the target address Server Name Indication
-	// Servername is used in the TLS handshake process (Client Hello)
-	// https://www.cloudflare.com/learning/ssl/what-is-sni/
-
-	// InsecureSkipVerify is to allow a TLS connection complete even if the certificate cannot be verified
-	cfg := &tls.Config{
-		InsecureSkipVerify: insecureSkipVerify,
-	}
-	if servername != "" {
-		cfg.ServerName = servername
-	} else {
-		cfg.ServerName = address
-	}
+	cfg := constructTLSConfig()
 
 	// Create a TCP connection to the target address
 	dailAddress := address
@@ -202,9 +198,10 @@ func getChains(address string, port string, servername string, insecureSkipVerif
 		}
 	}(tlsClient)
 	connState := tlsClient.ConnectionState()
+
 	// Populate a TLSInfo and return it
 	tlsInfo = TLSInfo{
-		ServerName:         servername,
+		ServerName:         cfg.ServerName,
 		Address:            address,
 		Version:            connState.Version,
 		CipherSuite:        connState.CipherSuite,
@@ -217,10 +214,10 @@ func getChains(address string, port string, servername string, insecureSkipVerif
 
 func processCerts(cbr *ChainBuilderResult, r *TLSInfo) {
 	if len(r.PeerCertificates) == 0 {
-		log.Fatal("No certificates provided on the TLS connection for address: " + config.Address + ".")
+		log.Fatal("No certificates provided on the TLS connection for address: " + tlsToolConfig.Address + ".")
 	}
 
-	log.Println("Certificate(s) received from TLS connection:")
+	log.Println("Certificate(s) received from the TLS connection:")
 	for i, c := range r.PeerCertificates {
 		peerCertConverted := CreateChainLink(c)
 		cbr.PeerCertificates = append(cbr.PeerCertificates, peerCertConverted)
@@ -229,10 +226,10 @@ func processCerts(cbr *ChainBuilderResult, r *TLSInfo) {
 	fmt.Println()
 
 	var dnsName string
-	if config.Servername != "" {
-		dnsName = config.Servername
+	if tlsToolConfig.Servername != "" {
+		dnsName = tlsToolConfig.Servername
 	} else {
-		dnsName = config.Address
+		dnsName = tlsToolConfig.Address
 	}
 	leafCert := r.PeerCertificates[0]
 
@@ -256,7 +253,7 @@ func processCerts(cbr *ChainBuilderResult, r *TLSInfo) {
 		MaxConstraintComparisions: 0,
 	}
 
-	if config.NoUseTLSIntermediates == 1 {
+	if tlsToolConfig.NoUseTLSIntermediates == 1 {
 		localVerifyOptions.Intermediates = nil
 	}
 
@@ -463,4 +460,48 @@ func CheckCertAllowed(cert *x509.Certificate, certType string) bool {
 		}
 	}
 	return true
+}
+
+func constructTLSConfig() *tls.Config {
+
+	if tlsToolConfig.Address == "" {
+		log.Fatal("Address (-a/--address) must be specified. Use -h/--help for more information.")
+	}
+
+	cfg := &tls.Config{
+		InsecureSkipVerify: tlsToolConfig.InsecureSkipVerify,
+	}
+	//fmt.Println(tlsVersionsMap)
+	if _, ok := tlsVersionsMap[tlsToolConfig.TLSMinVersion]; ok {
+		cfg.MinVersion = tlsVersionsMap[tlsToolConfig.TLSMinVersion]
+	} else if tlsToolConfig.TLSMinVersion != "" {
+		log.Fatal("Unknown TLSMinVersion: '" + tlsToolConfig.TLSMinVersion + "' (-u/--tls-min-version)." +
+			" Supported versions are: " + getSupportedTLSVersionsString())
+	}
+
+	if _, ok := tlsVersionsMap[tlsToolConfig.TLSMaxVersion]; ok {
+		cfg.MaxVersion = tlsVersionsMap[tlsToolConfig.TLSMaxVersion]
+	} else if tlsToolConfig.TLSMaxVersion != "" {
+		log.Fatal("Unknown TLSMaxVersion: '" + tlsToolConfig.TLSMaxVersion + "' (-x/--tls-max-version)." +
+			" Supported versions are: " + getSupportedTLSVersionsString())
+	}
+
+	// Servername is the string that will be used by the target address Server Name Indication
+	// Servername is used in the TLS handshake process (Client Hello)
+	// https://www.cloudflare.com/learning/ssl/what-is-sni/
+	if tlsToolConfig.Servername != "" {
+		cfg.ServerName = tlsToolConfig.Servername
+	} else {
+		cfg.ServerName = tlsToolConfig.Address
+	}
+	return cfg
+}
+
+func getSupportedTLSVersionsString() string {
+	supportedVersions := ""
+	for v := range tlsVersionsMap {
+		supportedVersions += v + ", "
+	}
+	supportedVersions = strings.Trim(supportedVersions, ", ")
+	return supportedVersions
 }

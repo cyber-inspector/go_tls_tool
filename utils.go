@@ -69,14 +69,14 @@ func ParseCommandLineArgs() *TLSToolConfig {
 		"mode",
 		&argparse.Options{
 			Required: false,
-			Help:     "Which mode to use: chains,tlsVersion",
+			Help:     "Which mode to use, Available values: chains, tlsVersion",
 		})
 	printVersion := parser.Flag(
 		"V",
 		"version",
 		&argparse.Options{
 			Required: false,
-			Help:     "Which mode to use: chains,tlsVersion",
+			Help:     "Display the version of this application.",
 		})
 	address := parser.String(
 		"a",
@@ -113,6 +113,34 @@ func ParseCommandLineArgs() *TLSToolConfig {
 			Required: false,
 			Help:     "when set to 1 do not try and use the intermediates provided by by the tls connection",
 		})
+	insecureSkipVerify := parser.Flag(
+		"i",
+		"insecure-skip-verify",
+		&argparse.Options{
+			Required: false,
+			Help:     "when set to 1 do not try and use the intermediates provided by by the tls connection",
+		})
+	tlsMinVersion := parser.String(
+		"u",
+		"tls-min-version",
+		&argparse.Options{
+			Required: false,
+			Help:     "Minimum TLS version to use. Available values: " + getSupportedTLSVersionsString(),
+		})
+	tlsMaxVersion := parser.String(
+		"x",
+		"tls-max-version",
+		&argparse.Options{
+			Required: false,
+			Help:     "Maximum TLS version to use. Available values: " + getSupportedTLSVersionsString(),
+		})
+	noDumpResult := parser.Flag(
+		"o",
+		"no-dump-result",
+		&argparse.Options{
+			Required: false,
+			Help:     "Do not dump the result to file.",
+		})
 	err := parser.Parse(os.Args)
 	if err != nil {
 		// In case of error print error and print usage
@@ -126,8 +154,12 @@ func ParseCommandLineArgs() *TLSToolConfig {
 		Servername:            *servername,
 		CertDir:               *certDir,
 		Port:                  *port,
+		InsecureSkipVerify:    *insecureSkipVerify,
 		NoUseTLSIntermediates: *noUseTLSIntermediates,
 		printVersion:          *printVersion,
+		TLSMinVersion:         *tlsMinVersion,
+		TLSMaxVersion:         *tlsMaxVersion,
+		NoDumpResult:          *noDumpResult,
 	}
 	return &conf
 }
@@ -167,7 +199,7 @@ func structToJsonStr(obj interface{}) ([]byte, error) {
 func dumpResultToFIle(result interface{}) {
 	ttr := TLSToolResult{
 		RunDate: time.Now().UTC().Format("2006-01-02T15:04:05 -0700"),
-		Config:  config,
+		Config:  tlsToolConfig,
 		Result:  result,
 	}
 	stj, stjErr := structToJsonStr(ttr)
@@ -175,11 +207,11 @@ func dumpResultToFIle(result interface{}) {
 		log.Fatal("Unable to json marshal the output object due to " + stjErr.Error())
 	}
 
-	outputFilename := config.Mode + "_" + config.Address
-	if config.Servername != "" {
-		outputFilename += "_" + config.Servername
+	outputFilename := tlsToolConfig.Mode + "_" + tlsToolConfig.Address
+	if tlsToolConfig.Servername != "" {
+		outputFilename += "_" + tlsToolConfig.Servername
 	} else {
-		outputFilename += "_" + config.Address
+		outputFilename += "_" + tlsToolConfig.Address
 	}
 	outputFilename += "_"
 	outputFilename += strconv.FormatInt(time.Now().Unix(), 10)
@@ -204,6 +236,6 @@ func dumpResultToFIle(result interface{}) {
 	if err != nil {
 		log.Fatal("There was an error flushing the file: " + outputFilename + " due to " + fileErr.Error())
 	}
-
+	fmt.Println()
 	log.Println("More detailed information has been dumped to the file: " + outputFilename)
 }
