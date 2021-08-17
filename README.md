@@ -84,7 +84,7 @@ for the construction of default TLS chains. NOTE: only used for mode: chains
   - Required: `false`
   - Type: `bool`
   - Allowed Values: No values can be provided as this changes the default state of false to true
-  - Description: Dump the output to a file in the format: <mode>-<address>-<servername>-<epochTimeSeconds<.json
+  - Description: Dump the output to a file in the format: `<mode>-<address>-<servername>-<epochTimeSeconds>.json`
 - PrintCerts: `-t/--print-certs`
   - Required: `false`
   - Type: `bool`
@@ -123,11 +123,11 @@ attempted to be built.
 
 # Custom Certificate Pools
 `-d/--cert-dir` can be optionally used to specify a directory containing root/intermediate certificates.
-- The intent of these pools is for use only during custom chain generation. See `Custom Pool Chains`
-in the section `Modes`
+- The intent of these pools is for use only during custom chain generation. See [Custom Pool Chains](#custom-pool-chains)
+in the section [Modes](#modes)
 - There should be two subdirectories in the directory specified by `-d/--cert-dir`
-  - `root` which should contain `root` certificate files in the `PEM` format
-  - `intermediate` which should contain `intermediate` certificate files in the `PEM` format
+  - `root` which should contain `root` certificate files in the [PEM](https://en.wikipedia.org/wiki/Privacy-Enhanced_Mail) format
+  - `intermediate` which should contain `intermediate` certificate files in the [PEM](https://en.wikipedia.org/wiki/Privacy-Enhanced_Mail) format
 - If an `intermediate` certificate is placed in the `root` subdirectory, or visa versa, a message
 should be displayed and the certificate in question will not be added to either pool
 
@@ -213,3 +213,4 @@ $ goTLSTool --mode chains --address example.com --cert-dir /path/to/certificates
 - TLS_CHACHA20_POLY1305_SHA256
 
 # Contribution
+TBD
