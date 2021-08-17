@@ -84,6 +84,24 @@ var tlsVersionsMap = map[string]uint16{
 	"TLS13": tls.VersionTLS13,
 }
 
+var certFieldsMap = map[string]bool{
+	"subject":        true,
+	"issuer":         true,
+	"ski":            true,
+	"aki":            true,
+	"notAfter":       true,
+	"notBefore":      true,
+	"certMD5":        true,
+	"certSHA1":       true,
+	"certSHA256":     true,
+	"dnsNames":       true,
+	"emailAddresses": true,
+	"uris":           true,
+	"keyUsage":       true,
+	"extraKeyUsage":  true,
+	"certPEM":        true,
+}
+
 // Copied from http.transport.go
 type tlsHandshakeTimeoutError struct{}
 
@@ -218,14 +236,19 @@ func doTLS(address string, port string, tcpDialTimeout time.Duration, tlsHandsha
 
 func processCerts(cbr *ChainBuilderResult, r *TLSInfo) {
 	if len(r.PeerCertificates) == 0 {
-		log.Fatal("No certificates provided on the TLS connection for address: " + tlsToolConfig.Address + ".")
+		log.Fatal("No certificates provided on the TLS handshake for address: " + tlsToolConfig.Address + ".")
 	}
 
-	log.Println("Certificate(s) received from the TLS connection:")
+	if tlsToolConfig.printCerts == true {
+		fmt.Println("Certificate(s) received from the TLS handshake")
+		fmt.Println("----------------------------------------------")
+	}
 	for i, c := range r.PeerCertificates {
 		peerCertConverted := CreateChainLink(c)
 		cbr.PeerCertificates = append(cbr.PeerCertificates, peerCertConverted)
-		fmt.Println("["+strconv.Itoa(i)+"]", GetCertSummaryString(peerCertConverted))
+		if tlsToolConfig.printCerts == true {
+			fmt.Println("["+strconv.Itoa(i)+"]", GetCertSummaryString(peerCertConverted))
+		}
 	}
 	fmt.Println()
 
@@ -268,10 +291,10 @@ func processCerts(cbr *ChainBuilderResult, r *TLSInfo) {
 			" connection ", defaultChainsErr)
 	}
 
-	log.Println("Default Certificate Chains(s) the were able to be built using certificates received from TLS connection" +
-		" in the format: [chain_index][certificate_index] <certificate information>")
+	fmt.Println("Default Certificate Chains(s) that were able to be built using certificates received from TLS" +
+		" handshake in the format: [chain_index][certificate_index] <certificate information>")
 	fmt.Println("NOTE: Some operating system (e.g. windows) can provide extra intermediate certificates than" +
-		" those provided from the TLS connection for use in chain building.")
+		" those provided from the TLS handshake for use in chain building.")
 	defaultConvertedChains, defaultConvertedChainsErr := ConvertChains(defaultChains)
 	cbr.DefaultChains = defaultConvertedChains
 	if defaultConvertedChainsErr != nil {
@@ -297,7 +320,7 @@ func processCerts(cbr *ChainBuilderResult, r *TLSInfo) {
 				" local certificate directory specified from the command line arg -d/--cert-dir", customPoolChainsErr)
 		}
 
-		log.Println("Custom Certificate Chains(s) the were able to be built using certificates received from the" +
+		log.Println("Custom Certificate Chains(s) that were able to be built using certificates received from the" +
 			" local certificate directory specified from the command line arg -d/--cert-dir in the format:" +
 			" [chain_index][certificate_index] <certificate information>")
 		customPoolConvertedChains, customPoolConvertedChainsErr := ConvertChains(customPoolChains)
@@ -315,13 +338,93 @@ func processCerts(cbr *ChainBuilderResult, r *TLSInfo) {
 }
 
 func GetCertSummaryString(c *ChainLink) string {
-	certSummaryString := ""
-	certSummaryString += "Subject: " + c.Subject + ", "
-	certSummaryString += "SKI: " + c.SubjectKeyIdentifier + ", "
-	certSummaryString += "AKI: " + c.AuthorityKeyIdentifier + ", "
-	certSummaryString += "NotAfter: " + c.NotAfter + ", "
-	certSummaryString += "SHA1: " + c.CertFingerprints.SHA1
+	var certFields []string
+	var certSummaryString string
+	if tlsToolConfig.printCertFields == "" {
+		certFields = []string{"subject", "certSHA1"}
+	} else {
+		certFields = processCertFields(tlsToolConfig.printCertFields)
+	}
+	certSummaryStringSperator := ", "
+	for _, certField := range certFields {
+		switch certField {
+		case "subject":
+			certSummaryString += "Subject: " + c.Subject + certSummaryStringSperator
+		case "issuer":
+			certSummaryString += "Issuer: " + c.Issuer + certSummaryStringSperator
+		case "ski":
+			certSummaryString += "SKI: " + c.SubjectKeyIdentifier + certSummaryStringSperator
+		case "aki":
+			certSummaryString += "AKI: " + c.AuthorityKeyIdentifier + certSummaryStringSperator
+		case "notBefore":
+			certSummaryString += "NotBefore: " + c.NotBefore + certSummaryStringSperator
+		case "notAfter":
+			certSummaryString += "NotAfter: " + c.NotAfter + certSummaryStringSperator
+		case "certMD5":
+			certSummaryString += "certMD5 " + c.CertFingerprints.MD5 + certSummaryStringSperator
+		case "certSHA1":
+			certSummaryString += "certSHA1: " + c.CertFingerprints.SHA1 + certSummaryStringSperator
+		case "certSHA256":
+			certSummaryString += "certSHA256: " + c.CertFingerprints.SHA256 + certSummaryStringSperator
+		case "dnsNames":
+			certSummaryString += "dnsNames: "
+			for _, dnsName := range c.DNSNames {
+				certSummaryString += dnsName + ","
+			}
+			certSummaryString = strings.Trim(certSummaryString, ",")
+		case "emailAddresses":
+			certSummaryString += "emailAddresses: "
+			for _, emailAddress := range c.EmailAddresses {
+				certSummaryString += emailAddress + ","
+			}
+			certSummaryString = strings.Trim(certSummaryString, ",")
+		case "uris":
+			certSummaryString += "uris: "
+			for _, uri := range c.URIs {
+				certSummaryString += uri + ","
+			}
+			certSummaryString = strings.Trim(certSummaryString, ",")
+		case "keyUsage":
+			certSummaryString += "uris: "
+			for _, keyUsage := range c.KeyUsage {
+				certSummaryString += keyUsage.Name + ","
+			}
+			certSummaryString = strings.Trim(certSummaryString, ",")
+		case "extraKeyUsage":
+			certSummaryString += "uris: "
+			for _, extraKeyUsage := range c.ExtraKeyUsage {
+				certSummaryString += extraKeyUsage.Name + "(oid: " + extraKeyUsage.Oid + "),"
+			}
+			certSummaryString = strings.Trim(certSummaryString, ",")
+		case "certPEM":
+			certSummaryString += "certPem: " + c.CertPem + "\n"
+		}
+	}
+	certSummaryString = strings.Trim(certSummaryString, certSummaryStringSperator)
 	return certSummaryString
+}
+
+func processCertFields(certFields string) []string {
+	var certFieldsList []string
+	certFields = strings.Trim(certFields, ",")
+	certFieldsSplit := strings.Split(certFields, ",")
+	for _, certField := range certFieldsSplit {
+		if _, ok := certFieldsMap[certField]; ok {
+			certFieldsList = append(certFieldsList, certField)
+		} else {
+			log.Fatal("Unknown field '"+certField+"' . Allowed fields: ", getAllowedCertFields())
+		}
+	}
+	return certFieldsList
+}
+
+func getAllowedCertFields() string {
+	var allowedCertFieldsStr string
+	for certField := range certFieldsMap {
+		allowedCertFieldsStr += certField + ", "
+	}
+	allowedCertFieldsStr = strings.Trim(allowedCertFieldsStr, ", ")
+	return allowedCertFieldsStr
 }
 
 func CreateChainLink(c *x509.Certificate) *ChainLink {
@@ -434,7 +537,7 @@ func CreateCertPoolFromDir(pemCertsDir string, certType string) (*x509.CertPool,
 				continue
 			}
 			if CheckCertAllowed(cert, certType) == false {
-				log.Println(false, filePath)
+				fmt.Println(false, filePath)
 				continue
 			}
 			certPool.AddCert(cert)
@@ -456,7 +559,7 @@ func CheckCertAllowed(cert *x509.Certificate, certType string) bool {
 		// KeyUsageCertSign and KeyUsageCRLSign should be on root and intermediate certs
 		if (!HasBit(int(cert.KeyUsage), int(x509.KeyUsageCertSign)) ||
 			!HasBit(int(cert.KeyUsage), int(x509.KeyUsageCRLSign))) && int(cert.KeyUsage) != 0 {
-			log.Println("Not adding certificate with SHA256 Fingerprint: " + certificateFingerprint +
+			fmt.Println("Not adding certificate with SHA256 Fingerprint: " + certificateFingerprint +
 				" as KeyUsageCertSign or KeyUsageCRLSign are not present." +
 				" KeyUsage (base 10 int): " + strconv.Itoa(int(cert.KeyUsage)))
 			return false
@@ -465,13 +568,13 @@ func CheckCertAllowed(cert *x509.Certificate, certType string) bool {
 		subjectFingerprint := GetCertFingerprint("SHA256", cert.RawSubject)
 		// Issue and Subject must match if it is a root and the reverse if it is an intermediate
 		if issuerFingerprint != subjectFingerprint && certType == "root" {
-			log.Println("Not adding cert SHA256Fingerprint: " + certificateFingerprint + " to " + certType + " pool" +
+			fmt.Println("Not adding cert SHA256Fingerprint: " + certificateFingerprint + " to " + certType + " pool" +
 				" as issuer '" + cert.Issuer.String() + "' with SHA256 Fingerprint: " + issuerFingerprint +
 				" does not match subject '" + cert.Subject.String() + "' subjectFingerprint: " + subjectFingerprint +
 				" For root certificates the subject and issuer should match.")
 			return false
 		} else if issuerFingerprint == subjectFingerprint && certType == "intermediate" {
-			log.Println("Not adding cert SHA256Fingerprint: " + certificateFingerprint + " to " + certType + " pool" +
+			fmt.Println("Not adding cert SHA256Fingerprint: " + certificateFingerprint + " to " + certType + " pool" +
 				" as issuer '" + cert.Issuer.String() + "' with SHA256 Fingerprint: " + issuerFingerprint +
 				" does matches subject '" + cert.Subject.String() + "' subjectFingerprint: " + subjectFingerprint +
 				" For intermediate certificates the subject and issuer should not match.")
@@ -486,22 +589,36 @@ func constructTLSConfig() *tls.Config {
 		log.Fatal("Address (-a/--address) must be specified. Use -h/--help for more information.")
 	}
 
+	if tlsToolConfig.TLSVersion != "" && (tlsToolConfig.TLSMinVersion != "" || tlsToolConfig.TLSMaxVersion != "") {
+		log.Fatal("-T/--tls-version cannot be used with -u/--tls-min-version or -x/--tls-max-version")
+	}
+
 	cfg := &tls.Config{
 		InsecureSkipVerify: tlsToolConfig.InsecureSkipVerify,
 	}
-	//fmt.Println(tlsVersionsMap)
-	if _, ok := tlsVersionsMap[tlsToolConfig.TLSMinVersion]; ok {
-		cfg.MinVersion = tlsVersionsMap[tlsToolConfig.TLSMinVersion]
-	} else if tlsToolConfig.TLSMinVersion != "" {
-		log.Fatal("Unknown TLSMinVersion: '" + tlsToolConfig.TLSMinVersion + "' (-u/--tls-min-version)." +
-			" Supported versions are: " + getSupportedTLSVersionsString())
-	}
 
-	if _, ok := tlsVersionsMap[tlsToolConfig.TLSMaxVersion]; ok {
-		cfg.MaxVersion = tlsVersionsMap[tlsToolConfig.TLSMaxVersion]
-	} else if tlsToolConfig.TLSMaxVersion != "" {
-		log.Fatal("Unknown TLSMaxVersion: '" + tlsToolConfig.TLSMaxVersion + "' (-x/--tls-max-version)." +
-			" Supported versions are: " + getSupportedTLSVersionsString())
+	if tlsToolConfig.TLSVersion != "" {
+		tlsVersionUint16, tlsVersionUint16Err := getTLSVersionFromString(tlsToolConfig.TLSVersion)
+		if tlsVersionUint16Err != nil {
+			log.Fatal("-T/--tls-version ", tlsVersionUint16Err.Error())
+		}
+		cfg.MinVersion = tlsVersionUint16
+		cfg.MaxVersion = tlsVersionUint16
+	} else {
+		if tlsToolConfig.TLSMinVersion != "" {
+			tlsMinVersionUint16, tlsMinVersionUint16Err := getTLSVersionFromString(tlsToolConfig.TLSMinVersion)
+			if tlsMinVersionUint16Err != nil {
+				log.Fatal("-u/--tls-min-version ", tlsMinVersionUint16Err.Error())
+			}
+			cfg.MinVersion = tlsMinVersionUint16
+		}
+		if tlsToolConfig.TLSMaxVersion != "" {
+			tlsMaxVersionUint16, tlsMaxVersionUint16Err := getTLSVersionFromString(tlsToolConfig.TLSMaxVersion)
+			if tlsMaxVersionUint16Err != nil {
+				log.Fatal("-x/--tls-max-version ", tlsMaxVersionUint16Err.Error())
+			}
+			cfg.MaxVersion = tlsMaxVersionUint16
+		}
 	}
 
 	// Servername is the string that will be used by the target address Server Name Indication
@@ -522,4 +639,13 @@ func getSupportedTLSVersionsString() string {
 	}
 	supportedVersions = strings.Trim(supportedVersions, ", ")
 	return supportedVersions
+}
+
+func getTLSVersionFromString(tlsVersionString string) (uint16, error) {
+	if _, ok := tlsVersionsMap[tlsVersionString]; ok {
+		return tlsVersionsMap[tlsVersionString], nil
+	} else {
+		return 0, errors.New("Unknown TLS Version: '" + tlsVersionString + "'." +
+			" Supported versions are: " + getSupportedTLSVersionsString())
+	}
 }

@@ -10,7 +10,7 @@ import (
 	"strconv"
 )
 
-var version = "1.0.0"
+var version = "1.0.1"
 var tlsToolConfig *TLSToolConfig
 
 type TLSToolConfig struct {
@@ -21,10 +21,13 @@ type TLSToolConfig struct {
 	Port                  int    `json:"port"`
 	InsecureSkipVerify    bool   `json:"insecure_skip_verify"`
 	NoUseTLSIntermediates bool   `json:"no_use_tls_intermediates"`
+	TLSVersion            string `json:"tls_version"`
 	TLSMinVersion         string `json:"tls_min_version"`
 	TLSMaxVersion         string `json:"tls_max_version"`
 	printVersion          bool
-	NoDumpResult          bool `json:"no_dump_result"`
+	dumpResult            bool
+	printCerts            bool
+	printCertFields       string
 }
 
 type TLSToolResult struct {
@@ -55,7 +58,7 @@ var rootCertPool *x509.CertPool
 var intermediateCertPool *x509.CertPool
 
 func main() {
-	fmt.Println("Go TLS Tool Version:", version, "OS:", runtime.GOOS, "Arch:", runtime.GOARCH)
+	log.Println("Go TLS Tool Version:"+version, "OS:"+runtime.GOOS, "Arch:"+runtime.GOARCH)
 	tlsToolConfig = ParseCommandLineArgs()
 
 	if tlsToolConfig.printVersion == true {
@@ -68,6 +71,10 @@ func main() {
 		}
 	}
 
+	if tlsToolConfig.printCertFields != "" && tlsToolConfig.printCerts == false {
+		log.Println("Warning: -F|--print-cert-fields has been set but -t/--print-certs has not.")
+	}
+
 	var result interface{}
 
 	if tlsToolConfig.Mode == "chains" {
@@ -78,9 +85,10 @@ func main() {
 		log.Fatal("Unknown mode: '" + tlsToolConfig.Mode + "'. Available values: chains, tlsVersion")
 	}
 
-	if tlsToolConfig.NoDumpResult == false {
+	if tlsToolConfig.dumpResult == true {
 		dumpResultToFIle(result)
 	}
+
 	os.Exit(0)
 }
 
@@ -96,7 +104,7 @@ func modeGetChains() interface{} {
 	)
 
 	if rErr != nil {
-		log.Fatal("An error occurred trying to establish a tls connection:", rErr.Error())
+		log.Fatal("An error occurred trying to establish a TLS connection:", rErr.Error())
 	}
 
 	if r == nil {
@@ -116,6 +124,11 @@ func modeGetChains() interface{} {
 		}
 	}
 
+	fmt.Println("TLS Connection Details")
+	fmt.Println("----------------------")
+	fmt.Println("TLSVersion:", cbr.Version)
+	fmt.Println("CipherSuite:", cbr.CipherSuite)
+	fmt.Println()
 	processCerts(&cbr, r)
 	return &cbr
 }
@@ -149,15 +162,21 @@ func modeGetTLS() interface{} {
 		}
 	}
 
-	log.Println("TLS Connection Details:")
+	fmt.Println("TLS Connection Details")
+	fmt.Println("----------------------")
 	fmt.Println("TLSVersion:", tlr.Version)
 	fmt.Println("CipherSuite:", tlr.CipherSuite)
 	fmt.Println()
-	fmt.Println("Certificate(s) received from the TLS connection:")
+	if tlsToolConfig.printCerts == true {
+		fmt.Println("Certificate(s) received from the TLS handshake")
+		fmt.Println("----------------------------------------------")
+	}
 	for i, c := range r.PeerCertificates {
 		peerCertConverted := CreateChainLink(c)
 		tlr.PeerCertificates = append(tlr.PeerCertificates, peerCertConverted)
-		fmt.Println("["+strconv.Itoa(i)+"]", GetCertSummaryString(peerCertConverted))
+		if tlsToolConfig.printCerts == true {
+			fmt.Println("["+strconv.Itoa(i)+"]", GetCertSummaryString(peerCertConverted))
+		}
 	}
 	return tlr
 }
