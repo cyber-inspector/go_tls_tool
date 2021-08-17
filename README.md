@@ -62,8 +62,7 @@ for the construction of default TLS chains. NOTE: only used for mode: chains
   - Type: `bool`
   - Allowed Values: No values can be provided as this changes the default state of false to true
   - Description: Set tls.Config.InsecureSkipVerify to true i.e. accept any certificate provided to allow a TLS
-connection to be established.
-by the remote host.
+    connection to be established.
 - TLSMinVersion: `-u/--tls-min-version`
   - Required: `false`
   - Type: `string`
@@ -75,12 +74,28 @@ by the remote host.
   - Type: `string`
   - Allowed Values: `TLS10` `TLS11` `TLS12` `TLS13`
   - Description: Maximum TLS version to use in handshake. If only a single tls version is desired set
-`-u/--tls-min-version` and `-u/--tls-max-version` to the same value.
-- NoDumpResult: `-o/--no-dump-result`
+    `-u/--tls-min-version` and `-u/--tls-max-version` to the same value.
+- TLSMaxVersion: `-T/--tls-version`
+  - Required: `false`
+  - Type: `string`
+  - Allowed Values: `TLS10` `TLS11` `TLS12` `TLS13`
+  - Description: Sole TLS version to use in handshake
+- DumpResult: `-o/--dump-result`
   - Required: `false`
   - Type: `bool`
   - Allowed Values: No values can be provided as this changes the default state of false to true
-  - Description: Do not dump the result of this tool to a file.
+  - Description: Dump the output to a file in the format: `<mode>-<address>-<servername>-<epochTimeSeconds>.json`
+- PrintCerts: `-t/--print-certs`
+  - Required: `false`
+  - Type: `bool`
+  - Allowed Values: No values can be provided as this changes the default state of false to true
+  - Description: Print the certificates from the TLS handshake to the console.
+- PrintCertsFields: `-F/--print-cert-fields`
+  - Required: `false`
+  - Type: `string`
+  - Allowed Values: notBefore, dnsNames, ski, emailAddresses, uris, extraKeyUsage, certPEM, aki, certSHA1, notAfter, certMD5, certSHA256, keyUsage, subject, issuer
+  - Description: CSL (comma seperated list) of fields from the x509 certificate to print to the console.
+    This applies to -t/-print-certs and chains mode.
 
 # Modes
 ## tlsVersion
@@ -108,11 +123,11 @@ attempted to be built.
 
 # Custom Certificate Pools
 `-d/--cert-dir` can be optionally used to specify a directory containing root/intermediate certificates.
-- The intent of these pools is for use only during custom chain generation. See `Custom Pool Chains`
-in the section `Modes`
+- The intent of these pools is for use only during custom chain generation. See [Custom Pool Chains](#custom-pool-chains)
+in the section [Modes](#modes)
 - There should be two subdirectories in the directory specified by `-d/--cert-dir`
-  - `root` which should contain `root` certificate files in the `PEM` format
-  - `intermediate` which should contain `intermediate` certificate files in the `PEM` format
+  - `root` which should contain `root` certificate files in the [PEM](https://en.wikipedia.org/wiki/Privacy-Enhanced_Mail) format
+  - `intermediate` which should contain `intermediate` certificate files in the [PEM](https://en.wikipedia.org/wiki/Privacy-Enhanced_Mail) format
 - If an `intermediate` certificate is placed in the `root` subdirectory, or visa versa, a message
 should be displayed and the certificate in question will not be added to either pool
 
@@ -122,13 +137,18 @@ should be displayed and the certificate in question will not be added to either 
 ```shell
 $ goTLSTool --mode tlsVersion --address example.com
 ```
+### Determine the TLS version negotiated to `example.com` without restricting to specific TLS version(s) and save
+results to a file
+```shell
+$ goTLSTool --mode tlsVersion --address example.com --dump-result
+```
 ### Determine the TLS version negotiated to  `example.com` restricting to TLS versions 1.0 - 1.2
 ```shell
 $ goTLSTool --mode tlsVersion --address example.com --tls-min-version TLS10 --tls-max-version TLS12
 ```
 ### Determine the TLS version negotiated to `example.com` restricting to TLS versions 1.2 only
 ```shell
-$ goTLSTool --mode tlsVersion --address example.com --tls-min-version TLS12 --tls-max-version TLS12
+$ goTLSTool --mode tlsVersion --address example.com --tls-version TLS12
 ```
 ### Determine the TLS version negotiated to `example.com` with address `93.184.216.34` without restricting to specific TLS version(s)
 ```shell
@@ -137,6 +157,14 @@ $ goTLSTool --mode tlsVersion --address 93.184.216.34 --servername example.com
 ### Determine the TLS version negotiated to `example.com` with port `443` without restricting to specific TLS version(s)
 ```shell
 $ goTLSTool --mode tlsVersion --address example.com --port 443
+```
+### Determine the TLS version negotiated to `example.com` without restricting to specific TLS version(s) and print certificates
+```shell
+$ goTLSTool --mode tlsVersion --address example.com --print-certs
+```
+### Determine the TLS version negotiated to `example.com` without restricting to specific TLS version(s) and print certificates with fields issuer ski and aki
+```shell
+$ goTLSTool --mode tlsVersion --address example.com --print-certs --print-cert-fields subject,ski,aki
 ```
 ## chains
 ### Determine the default chains for `example.com`
@@ -185,3 +213,4 @@ $ goTLSTool --mode chains --address example.com --cert-dir /path/to/certificates
 - TLS_CHACHA20_POLY1305_SHA256
 
 # Contribution
+TBD

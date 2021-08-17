@@ -114,7 +114,7 @@ func ParseCommandLineArgs() *TLSToolConfig {
 		"no-use-tls-intermediates",
 		&argparse.Options{
 			Required: false,
-			Help: "Do not try and use the intermediate(s) provided by the tls connection for the construction" +
+			Help: "Do not try and use the intermediate(s) provided by the TLS handshake for the construction" +
 				" of default tls chains. NOTE: only used for mode: chains",
 		})
 	insecureSkipVerify := parser.Flag(
@@ -139,12 +139,34 @@ func ParseCommandLineArgs() *TLSToolConfig {
 			Required: false,
 			Help:     "Maximum TLS version to use in handshake. Available values: " + getSupportedTLSVersionsString(),
 		})
-	noDumpResult := parser.Flag(
-		"o",
-		"no-dump-result",
+	tlsVersion := parser.String(
+		"T",
+		"tls-version",
 		&argparse.Options{
 			Required: false,
-			Help:     "Do not dump the result to file.",
+			Help:     "Sole TLS version to use in handshake. Available values: " + getSupportedTLSVersionsString(),
+		})
+	dumpResult := parser.Flag(
+		"o",
+		"dump-result",
+		&argparse.Options{
+			Required: false,
+			Help:     "Dump the output to a file in the format: <mode>-<address>-<servername>-<epochTimeSeconds<.json",
+		})
+	printCerts := parser.Flag(
+		"t",
+		"print-certs",
+		&argparse.Options{
+			Required: false,
+			Help:     "Print the certificates from the TLS handshake to the console.",
+		})
+	printCertFields := parser.String(
+		"F",
+		"print-cert-fields",
+		&argparse.Options{
+			Required: false,
+			Help: "Fields from the x509 certificate to print to the console." +
+				" This applies to -t/-print-certs and chains mode.",
 		})
 	err := parser.Parse(os.Args)
 	if err != nil {
@@ -168,10 +190,13 @@ func ParseCommandLineArgs() *TLSToolConfig {
 		Port:                  *port,
 		InsecureSkipVerify:    *insecureSkipVerify,
 		NoUseTLSIntermediates: *noUseTLSIntermediates,
+		TLSVersion:            *tlsVersion,
 		printVersion:          *printVersion,
 		TLSMinVersion:         *tlsMinVersion,
 		TLSMaxVersion:         *tlsMaxVersion,
-		NoDumpResult:          *noDumpResult,
+		dumpResult:            *dumpResult,
+		printCerts:            *printCerts,
+		printCertFields:       *printCertFields,
 	}
 	return &conf
 }
@@ -181,7 +206,7 @@ func loadCerts(certDir string) {
 		rootCertDir := filepath.Join(certDir, "root")
 		rootPemCertPool, rootPemCertListErr := CreateCertPoolFromDir(rootCertDir, "root")
 		if rootPemCertListErr != nil {
-			log.Println("Failed to load root certificates from", rootCertDir, "due to",
+			fmt.Println("Failed to load root certificates from", rootCertDir, "due to",
 				rootPemCertListErr.Error())
 			//os.Exit(1)
 		}
@@ -191,14 +216,15 @@ func loadCerts(certDir string) {
 		intermediatePemCertPool, intermediatePemCertListErr := CreateCertPoolFromDir(
 			intermediateCertDir, "intermediate")
 		if intermediatePemCertListErr != nil {
-			log.Println("Failed to load root certificates from", intermediateCertDir, "due to",
+			fmt.Println("Failed to load root certificates from", intermediateCertDir, "due to",
 				intermediatePemCertListErr.Error())
 			//os.Exit(1)
 		}
 		intermediateCertPool = intermediatePemCertPool
 	} else {
-		log.Println("No path specified for -d/--cert-dir. No custom chains will be attempted to be built." +
+		fmt.Println("No path specified for -d/--cert-dir. No custom chains will be attempted to be built." +
 			" Default chains will still be attempted to be built.")
+		fmt.Println()
 	}
 }
 
@@ -252,5 +278,5 @@ func dumpResultToFIle(result interface{}) {
 		log.Fatal("There was an error flushing the file: " + outputFilename + " due to " + fileErr.Error())
 	}
 	fmt.Println()
-	log.Println("More detailed information has been dumped to the file: " + outputFilename)
+	fmt.Println("More detailed information has been dumped to the file: " + outputFilename)
 }
