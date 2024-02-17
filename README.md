@@ -96,6 +96,12 @@ for the construction of default TLS chains. NOTE: only used for mode: chains
   - Allowed Values: notBefore, dnsNames, ski, emailAddresses, uris, extraKeyUsage, certPEM, aki, certSHA1, notAfter, certMD5, certSHA256, keyUsage, subject, issuer
   - Description: CSL (comma seperated list) of fields from the x509 certificate to print to the console.
     This applies to -t/-print-certs and chains mode.
+- PrintCertsFields: `-e/--set-eval-time`
+  - Required: `false`
+  - Type: `string`
+  - Allowed Values: Any time the format "2021-02-02T15:04:05Z"
+  - Description: Set the 'now' time for the certificate(s) to be evaluated with. Useful for generating chains etc when
+    a cert has "expired".
 
 # Modes
 ## tlsVersion
