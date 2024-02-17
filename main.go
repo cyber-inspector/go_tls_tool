@@ -8,9 +8,10 @@ import (
 	"os"
 	"runtime"
 	"strconv"
+	"time"
 )
 
-var version = "1.0.1"
+var version = "1.0.2"
 var tlsToolConfig *TLSToolConfig
 
 type TLSToolConfig struct {
@@ -28,6 +29,7 @@ type TLSToolConfig struct {
 	dumpResult            bool
 	printCerts            bool
 	printCertFields       string
+	setEvalTime           string
 }
 
 type TLSToolResult struct {
@@ -77,10 +79,22 @@ func main() {
 
 	var result interface{}
 
+	var evalTime time.Time
+	if tlsToolConfig.setEvalTime == "" {
+		evalTime = time.Now()
+	} else {
+		var err error
+		evalTime, err = time.Parse(time.RFC3339, tlsToolConfig.setEvalTime)
+		if err != nil {
+			fmt.Println(err.Error())
+		}
+	}
+	fmt.Println("Using the following time for cert validity: " + evalTime.String())
+
 	if tlsToolConfig.Mode == "chains" {
-		result = modeGetChains()
+		result = modeGetChains(evalTime)
 	} else if tlsToolConfig.Mode == "tlsVersion" {
-		result = modeGetTLS()
+		result = modeGetTLS(evalTime)
 	} else {
 		log.Fatal("Unknown mode: '" + tlsToolConfig.Mode + "'. Available values: chains, tlsVersion")
 	}
@@ -92,7 +106,7 @@ func main() {
 	os.Exit(0)
 }
 
-func modeGetChains() interface{} {
+func modeGetChains(evalTime time.Time) interface{} {
 	// Load certs root/intermediate from
 	loadCerts(tlsToolConfig.CertDir)
 
@@ -101,6 +115,7 @@ func modeGetChains() interface{} {
 		strconv.Itoa(tlsToolConfig.Port),
 		0,
 		0,
+		evalTime,
 	)
 
 	if rErr != nil {
@@ -133,12 +148,13 @@ func modeGetChains() interface{} {
 	return &cbr
 }
 
-func modeGetTLS() interface{} {
+func modeGetTLS(evalTime time.Time) interface{} {
 	r, rErr := doTLS(
 		tlsToolConfig.Address,
 		strconv.Itoa(tlsToolConfig.Port),
 		0,
 		0,
+		evalTime,
 	)
 
 	if rErr != nil {
@@ -175,7 +191,9 @@ func modeGetTLS() interface{} {
 		peerCertConverted := CreateChainLink(c)
 		tlr.PeerCertificates = append(tlr.PeerCertificates, peerCertConverted)
 		if tlsToolConfig.printCerts == true {
-			fmt.Println("["+strconv.Itoa(i)+"]", GetCertSummaryString(peerCertConverted))
+			fmt.Println("Certificate " + strconv.Itoa(i+1))
+			fmt.Println(GetCertSummaryString(peerCertConverted))
+			fmt.Println()
 		}
 	}
 	return tlr

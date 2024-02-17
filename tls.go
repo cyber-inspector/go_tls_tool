@@ -170,11 +170,11 @@ func GetKeyUsageDetail(e x509.KeyUsage) *ExtraKeyUsage {
 // insecureSkipVerify when true will disable certificate verification (default is false)
 // tcpDialTimeout how long to wait to create a tcp connection before aborting
 // tlsHandshakeTimeout how long to wait to create a tls connection before aborting
-func doTLS(address string, port string, tcpDialTimeout time.Duration, tlsHandshakeTimeout time.Duration,
+func doTLS(address string, port string, tcpDialTimeout time.Duration, tlsHandshakeTimeout time.Duration, evalTime time.Time,
 ) (*TLSInfo, error) {
 	var tlsInfo TLSInfo
 
-	cfg := constructTLSConfig()
+	cfg := constructTLSConfig(evalTime)
 
 	// Create a TCP connection to the target address
 	dailAddress := address
@@ -295,15 +295,28 @@ func processCerts(cbr *ChainBuilderResult, r *TLSInfo) {
 		" handshake in the format: [chain_index][certificate_index] <certificate information>")
 	fmt.Println("NOTE: Some operating system (e.g. windows) can provide extra intermediate certificates than" +
 		" those provided from the TLS handshake for use in chain building.")
+	fmt.Println()
 	defaultConvertedChains, defaultConvertedChainsErr := ConvertChains(defaultChains)
 	cbr.DefaultChains = defaultConvertedChains
 	if defaultConvertedChainsErr != nil {
 		log.Fatal("An error occurred trying to create default chains:", defaultConvertedChainsErr.Error())
 	}
 	for chainI, chain := range defaultConvertedChains {
+		fmt.Println("Chain: " + strconv.Itoa(chainI+1))
 		for ci, c := range chain {
-			fmt.Println("["+strconv.Itoa(chainI)+"]["+strconv.Itoa(ci)+"]", GetCertSummaryString(c))
+			chain_len := len(chain)
+			if ci == 0 {
+				fmt.Println("Peer/Leaf Cert:")
+			} else if ci == chain_len-1 {
+				fmt.Println("Root Cert:")
+			} else {
+				fmt.Println("Intermediate Cert:")
+			}
+			fmt.Println(GetCertSummaryString(c))
+			fmt.Println()
+			//fmt.Println("["+strconv.Itoa(chainI)+"]["+strconv.Itoa(ci)+"]", GetCertSummaryString(c))
 		}
+		fmt.Println("######################")
 		fmt.Println()
 	}
 
@@ -341,11 +354,11 @@ func GetCertSummaryString(c *ChainLink) string {
 	var certFields []string
 	var certSummaryString string
 	if tlsToolConfig.printCertFields == "" {
-		certFields = []string{"subject", "certSHA1"}
+		certFields = []string{"subject", "issuer", "notBefore", "notAfter", "ski", "aki"}
 	} else {
 		certFields = processCertFields(tlsToolConfig.printCertFields)
 	}
-	certSummaryStringSperator := ", "
+	certSummaryStringSperator := "\n"
 	for _, certField := range certFields {
 		switch certField {
 		case "subject":
@@ -584,7 +597,7 @@ func CheckCertAllowed(cert *x509.Certificate, certType string) bool {
 	return true
 }
 
-func constructTLSConfig() *tls.Config {
+func constructTLSConfig(evalTime time.Time) *tls.Config {
 	if tlsToolConfig.Address == "" {
 		log.Fatal("Address (-a/--address) must be specified. Use -h/--help for more information.")
 	}
@@ -595,6 +608,9 @@ func constructTLSConfig() *tls.Config {
 
 	cfg := &tls.Config{
 		InsecureSkipVerify: tlsToolConfig.InsecureSkipVerify,
+		Time: func() time.Time {
+			return evalTime
+		},
 	}
 
 	if tlsToolConfig.TLSVersion != "" {

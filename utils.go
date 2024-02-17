@@ -168,6 +168,13 @@ func ParseCommandLineArgs() *TLSToolConfig {
 			Help: "Fields from the x509 certificate to print to the console." +
 				" This applies to -t/-print-certs and chains mode.",
 		})
+	setEvalTime := parser.String(
+		"e",
+		"set-eval-time",
+		&argparse.Options{
+			Required: false,
+			Help:     "Set the 'now' time for the certificate(s) to be evaluated with.",
+		})
 	err := parser.Parse(os.Args)
 	if err != nil {
 		// In case of error print error and print usage
@@ -197,6 +204,7 @@ func ParseCommandLineArgs() *TLSToolConfig {
 		dumpResult:            *dumpResult,
 		printCerts:            *printCerts,
 		printCertFields:       *printCertFields,
+		setEvalTime:           *setEvalTime,
 	}
 	return &conf
 }
