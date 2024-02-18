@@ -243,11 +243,13 @@ func processCerts(cbr *ChainBuilderResult, r *TLSInfo) {
 		fmt.Println("Certificate(s) received from the TLS handshake")
 		fmt.Println("----------------------------------------------")
 	}
+
 	for i, c := range r.PeerCertificates {
 		peerCertConverted := CreateChainLink(c)
-		cbr.PeerCertificates = append(cbr.PeerCertificates, peerCertConverted)
 		if tlsToolConfig.printCerts == true {
-			fmt.Println("["+strconv.Itoa(i)+"]", GetCertSummaryString(peerCertConverted))
+			fmt.Println("Certificate " + strconv.Itoa(i+1))
+			fmt.Println(GetCertSummaryString(peerCertConverted))
+			fmt.Println()
 		}
 	}
 	fmt.Println()
@@ -292,7 +294,7 @@ func processCerts(cbr *ChainBuilderResult, r *TLSInfo) {
 	}
 
 	fmt.Println("Default Certificate Chains(s) that were able to be built using certificates received from TLS" +
-		" handshake in the format: [chain_index][certificate_index] <certificate information>")
+		" handshake.")
 	fmt.Println("NOTE: Some operating system (e.g. windows) can provide extra intermediate certificates than" +
 		" those provided from the TLS handshake for use in chain building.")
 	fmt.Println()
@@ -304,17 +306,16 @@ func processCerts(cbr *ChainBuilderResult, r *TLSInfo) {
 	for chainI, chain := range defaultConvertedChains {
 		fmt.Println("Chain: " + strconv.Itoa(chainI+1))
 		for ci, c := range chain {
-			chain_len := len(chain)
+			chainLen := len(chain)
 			if ci == 0 {
 				fmt.Println("Peer/Leaf Cert:")
-			} else if ci == chain_len-1 {
+			} else if ci == chainLen-1 {
 				fmt.Println("Root Cert:")
 			} else {
 				fmt.Println("Intermediate Cert:")
 			}
 			fmt.Println(GetCertSummaryString(c))
 			fmt.Println()
-			//fmt.Println("["+strconv.Itoa(chainI)+"]["+strconv.Itoa(ci)+"]", GetCertSummaryString(c))
 		}
 		fmt.Println("######################")
 		fmt.Println()
@@ -334,17 +335,27 @@ func processCerts(cbr *ChainBuilderResult, r *TLSInfo) {
 		}
 
 		log.Println("Custom Certificate Chains(s) that were able to be built using certificates received from the" +
-			" local certificate directory specified from the command line arg -d/--cert-dir in the format:" +
-			" [chain_index][certificate_index] <certificate information>")
+			" local certificate directory specified from the command line arg -d/--cert-dir.")
 		customPoolConvertedChains, customPoolConvertedChainsErr := ConvertChains(customPoolChains)
 		if defaultConvertedChainsErr != nil {
 			log.Fatal("An error occurred trying to create custom pool chains:", customPoolConvertedChainsErr.Error())
 		}
 		cbr.CustomPoolChains = customPoolConvertedChains
 		for chainI, chain := range customPoolConvertedChains {
+			fmt.Println("Chain: " + strconv.Itoa(chainI+1))
 			for ci, c := range chain {
-				fmt.Println("["+strconv.Itoa(chainI)+"]["+strconv.Itoa(ci)+"]", GetCertSummaryString(c))
+				chainLen := len(chain)
+				if ci == 0 {
+					fmt.Println("Peer/Leaf Cert:")
+				} else if ci == chainLen-1 {
+					fmt.Println("Root Cert:")
+				} else {
+					fmt.Println("Intermediate Cert:")
+				}
+				fmt.Println(GetCertSummaryString(c))
+				fmt.Println()
 			}
+			fmt.Println("######################")
 			fmt.Println()
 		}
 	}
