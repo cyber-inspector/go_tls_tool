@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-var version = "1.0.3"
+var version = "1.0.4"
 var tlsToolConfig *TLSToolConfig
 
 type TLSToolConfig struct {
