@@ -2,15 +2,19 @@ package main
 
 import (
 	"bufio"
+	"crypto/ecdsa"
 	"crypto/md5"
+	"crypto/rsa"
 	"crypto/sha1"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"github.com/akamensky/argparse"
 	"hash"
 	"log"
+	"math/big"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -287,4 +291,28 @@ func dumpResultToFIle(result interface{}) {
 	}
 	fmt.Println()
 	fmt.Println("More detailed information has been dumped to the file: " + outputFilename)
+}
+
+func formatSerial(serial *big.Int) string {
+	b := serial.Bytes()
+	buf := make([]byte, 0, 3*len(b))
+	x := buf[1*len(b) : 3*len(b)]
+	hex.Encode(x, b)
+	for i := 0; i < len(x); i += 2 {
+		buf = append(buf, x[i], x[i+1], ':')
+	}
+	return strings.ToUpper(string(buf[:len(buf)-1]))
+}
+
+func getKeySize(cert *x509.Certificate) int {
+	var bitLen int
+	switch privKey := cert.PublicKey.(type) {
+	case *rsa.PublicKey:
+		bitLen = privKey.N.BitLen()
+	case *ecdsa.PublicKey:
+		bitLen = privKey.Curve.Params().BitSize
+	default:
+		log.Fatal("unsupported private key")
+	}
+	return bitLen
 }

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math/big"
 	"net"
 	"os"
 	"path/filepath"
@@ -85,21 +86,25 @@ var tlsVersionsMap = map[string]uint16{
 }
 
 var certFieldsMap = map[string]bool{
-	"subject":        true,
-	"issuer":         true,
-	"ski":            true,
-	"aki":            true,
-	"notAfter":       true,
-	"notBefore":      true,
-	"certMD5":        true,
-	"certSHA1":       true,
-	"certSHA256":     true,
-	"dnsNames":       true,
-	"emailAddresses": true,
-	"uris":           true,
-	"keyUsage":       true,
-	"extraKeyUsage":  true,
-	"certPEM":        true,
+	"subject":            true,
+	"issuer":             true,
+	"ski":                true,
+	"aki":                true,
+	"notAfter":           true,
+	"notBefore":          true,
+	"certMD5":            true,
+	"certSHA1":           true,
+	"certSHA256":         true,
+	"dnsNames":           true,
+	"emailAddresses":     true,
+	"uris":               true,
+	"keyUsage":           true,
+	"extraKeyUsage":      true,
+	"certPEM":            true,
+	"serialNumber":       true,
+	"signatureAlgorithm": true,
+	"publicKeyAlgorithm": true,
+	"publicKeySize":      true,
 }
 
 // Copied from http.transport.go
@@ -141,6 +146,10 @@ type ChainLink struct {
 	KeyUsage               []*ExtraKeyUsage `json:"key_usage"`
 	CertFingerprints       CertFingerprints `json:"cert_fingerprints"`
 	CertPem                string           `json:"cert_pem"`
+	SerialNumber           *big.Int         `json:"serial_number"`
+	SignatureAlgorithm     string           `json:"signature_algorithm"`
+	PublicKeyAlgorithm     string           `json:"public_key_algorithm"`
+	PublicKeySize          int              `json:"public_key_size"`
 }
 
 type CertFingerprints struct {
@@ -365,7 +374,7 @@ func GetCertSummaryString(c *ChainLink) string {
 	var certFields []string
 	var certSummaryString string
 	if tlsToolConfig.printCertFields == "" {
-		certFields = []string{"subject", "issuer", "notBefore", "notAfter", "ski", "aki"}
+		certFields = []string{"subject", "issuer", "serialNumber", "publicKeyAlgorithm", "publicKeySize", "signatureAlgorithm", "notBefore", "notAfter", "ski", "aki"}
 	} else {
 		certFields = processCertFields(tlsToolConfig.printCertFields)
 	}
@@ -420,6 +429,14 @@ func GetCertSummaryString(c *ChainLink) string {
 				certSummaryString += extraKeyUsage.Name + "(oid: " + extraKeyUsage.Oid + "),"
 			}
 			certSummaryString = strings.Trim(certSummaryString, ",")
+		case "serialNumber":
+			certSummaryString += "SerialNumber: " + formatSerial(c.SerialNumber) + " (" + c.SerialNumber.Text(10) + ")" + certSummaryStringSperator
+		case "signatureAlgorithm":
+			certSummaryString += "SignatureAlgorithm: " + c.SignatureAlgorithm + certSummaryStringSperator
+		case "publicKeyAlgorithm":
+			certSummaryString += "PublicKeyAlgorithm: " + c.PublicKeyAlgorithm + certSummaryStringSperator
+		case "publicKeySize":
+			certSummaryString += "PublicKeySize: " + strconv.Itoa(c.PublicKeySize) + certSummaryStringSperator
 		case "certPEM":
 			certSummaryString += "certPem: " + c.CertPem + "\n"
 		}
@@ -468,7 +485,11 @@ func CreateChainLink(c *x509.Certificate) *ChainLink {
 			SHA1:   GetCertFingerprint("SHA1", c.Raw),
 			SHA256: GetCertFingerprint("SHA256", c.Raw),
 		},
-		CertPem: x509ToPem(c),
+		SerialNumber:       c.SerialNumber,
+		SignatureAlgorithm: c.SignatureAlgorithm.String(),
+		PublicKeyAlgorithm: c.PublicKeyAlgorithm.String(),
+		PublicKeySize:      getKeySize(c),
+		CertPem:            x509ToPem(c),
 	}
 	for _, ip := range c.IPAddresses {
 		cl.IPAddresses = append(cl.IPAddresses, ip.String())
