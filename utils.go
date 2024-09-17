@@ -301,6 +301,9 @@ func formatSerial(serial *big.Int) string {
 	for i := 0; i < len(x); i += 2 {
 		buf = append(buf, x[i], x[i+1], ':')
 	}
+	if len(buf) == 0 {
+		return "0"
+	}
 	return strings.ToUpper(string(buf[:len(buf)-1]))
 }
 
